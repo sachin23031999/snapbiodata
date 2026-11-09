@@ -1,19 +1,32 @@
 "use client";
 
-import { useState, type ChangeEvent, type ReactNode } from "react";
+import { useId, useState, type ChangeEvent, type ReactNode } from "react";
 import {
   biodataSections,
   filledCount,
   headerPresets,
   emptyBiodata,
   sampleBiodata,
+  getBiodataSections,
+  removeBiodataRow,
+  restoreBiodataRow,
   type Biodata,
   type FieldDef,
+  type SectionDef,
 } from "@/data/biodata";
 import { ChevronDownIcon } from "@/components/ui/icons";
+import Button from "@/components/ui/Button";
+
+const fieldClass =
+  "w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-ink focus:border-maroon focus:outline-none focus:ring-2 focus:ring-maroon/10";
 
 /** Copy a Biodata so component state never aliases the shared module singletons. */
-const clone = (b: Biodata): Biodata => ({ ...b, values: { ...b.values } });
+const clone = (b: Biodata): Biodata => ({
+  ...b,
+  values: { ...b.values },
+  hiddenFields: b.hiddenFields?.slice(),
+  customRows: b.customRows?.map((row) => ({ ...row })),
+});
 
 interface Props {
   data: Biodata;
@@ -22,6 +35,8 @@ interface Props {
 
 export default function BiodataForm({ data, onChange }: Props) {
   const [photoError, setPhotoError] = useState("");
+  const [rowStatus, setRowStatus] = useState("");
+  const [resetVersion, setResetVersion] = useState(0);
   const [open, setOpen] = useState<Record<string, boolean>>({
     photo: true,
     personal: true,
@@ -33,6 +48,12 @@ export default function BiodataForm({ data, onChange }: Props) {
   const setValue = (key: string, value: string) =>
     onChange({ ...data, values: { ...data.values, [key]: value } });
   const setHeader = (header: string) => onChange({ ...data, header });
+  const reset = (next: Biodata) => {
+    setPhotoError("");
+    setRowStatus("");
+    setResetVersion((version) => version + 1);
+    onChange(clone(next));
+  };
 
   const onPhoto = (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -64,17 +85,14 @@ export default function BiodataForm({ data, onChange }: Props) {
         <div className="flex gap-2">
           <button
             type="button"
-            onClick={() => onChange(clone(sampleBiodata))}
+            onClick={() => reset(sampleBiodata)}
             className="rounded-md border border-line px-2.5 py-1 text-xs font-medium text-ink hover:border-maroon hover:text-maroon"
           >
             Load sample
           </button>
           <button
             type="button"
-            onClick={() => {
-              setPhotoError("");
-              onChange(clone(emptyBiodata));
-            }}
+            onClick={() => reset(emptyBiodata)}
             className="rounded-md border border-line px-2.5 py-1 text-xs font-medium text-ink hover:border-maroon hover:text-maroon"
           >
             Clear all
@@ -142,7 +160,8 @@ export default function BiodataForm({ data, onChange }: Props) {
         </div>
       </Accordion>
 
-      {biodataSections.map((section) => (
+      <p role="status" className="text-xs text-muted">{rowStatus}</p>
+      {getBiodataSections(data).map((section) => (
         <Accordion
           key={section.id}
           id={section.id}
@@ -158,9 +177,27 @@ export default function BiodataForm({ data, onChange }: Props) {
                 field={field}
                 value={data.values[field.key] ?? ""}
                 onChange={(v) => setValue(field.key, v)}
+                custom={data.customRows?.some((row) => row.id === field.key)}
+                onLabelChange={(label) => onChange({
+                  ...data,
+                  customRows: data.customRows?.map((row) => row.id === field.key ? { ...row, label } : row),
+                })}
+                onRemove={() => {
+                  onChange(removeBiodataRow(data, field.key));
+                  setRowStatus(`${field.label || "Custom"} row removed. Its value has been deleted.`);
+                  document.getElementById(`accordion-${section.id}`)?.focus();
+                }}
               />
             ))}
           </div>
+          {section.fields.length === 0 && <p className="text-sm text-muted">No rows in this section. Add a row below.</p>}
+          <RowControls
+            key={resetVersion}
+            section={section}
+            data={data}
+            onChange={onChange}
+            onStatus={setRowStatus}
+          />
         </Accordion>
       ))}
     </div>
@@ -186,8 +223,10 @@ function Accordion({
     <section className="overflow-hidden rounded-xl border border-line bg-surface">
       <button
         type="button"
+        id={`accordion-${id}`}
         onClick={() => onToggle(id)}
         aria-expanded={open}
+        aria-controls={`section-${id}`}
         className="flex w-full items-center justify-between px-4 py-3 text-left"
       >
         <span className="text-sm font-semibold uppercase tracking-wider text-maroon">{title}</span>
@@ -196,7 +235,7 @@ function Accordion({
           <ChevronDownIcon className={`h-4 w-4 text-muted transition-transform ${open ? "rotate-180" : ""}`} />
         </span>
       </button>
-      {open && <div className="border-t border-line p-4">{children}</div>}
+      {open && <div id={`section-${id}`} className="border-t border-line p-4">{children}</div>}
     </section>
   );
 }
@@ -205,20 +244,56 @@ function Field({
   field,
   value,
   onChange,
+  custom,
+  onLabelChange,
+  onRemove,
 }: {
   field: FieldDef;
   value: string;
   onChange: (v: string) => void;
+  custom?: boolean;
+  onLabelChange: (label: string) => void;
+  onRemove: () => void;
 }) {
-  const base =
-    "w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-ink focus:border-maroon focus:outline-none focus:ring-2 focus:ring-maroon/10";
   const wide = field.type === "textarea";
+  const inputId = `field-${field.key}`;
+  const invalidLabel = custom && !field.label.trim();
 
   return (
-    <div className={wide ? "sm:col-span-2" : ""}>
-      <label className="mb-1.5 block text-sm font-medium text-ink">{field.label}</label>
+    <div
+      className={wide ? "min-w-0 sm:col-span-2" : "min-w-0"}
+      role={custom ? "group" : undefined}
+      aria-label={custom ? `${field.label || "Untitled"} custom row` : undefined}
+    >
+      {custom && (
+        <div className="mb-2">
+          <label htmlFor={`${inputId}-label`} className="mb-1.5 block text-sm font-medium text-ink">Row label</label>
+          <input
+            id={`${inputId}-label`}
+            value={field.label}
+            onChange={(e) => onLabelChange(e.target.value)}
+            className={fieldClass}
+            required
+            aria-invalid={invalidLabel || undefined}
+            aria-describedby={invalidLabel ? `${inputId}-error` : undefined}
+          />
+          {invalidLabel && <p id={`${inputId}-error`} role="alert" className="mt-1 text-xs text-red-600">Enter a row label, or remove this row.</p>}
+        </div>
+      )}
+      <div className="mb-1.5 flex items-center justify-between gap-2">
+        <label htmlFor={inputId} className="text-sm font-medium text-ink">{custom ? "Row value" : field.label}</label>
+        <Button
+          type="button"
+          variant="ghost"
+          className="!px-1 !py-1 !text-xs"
+          aria-label={`Remove ${field.label || "custom"} row`}
+          onClick={onRemove}
+        >
+          Remove
+        </Button>
+      </div>
       {field.type === "select" ? (
-        <select value={value} onChange={(e) => onChange(e.target.value)} className={base}>
+        <select id={inputId} value={value} onChange={(e) => onChange(e.target.value)} className={fieldClass}>
           <option value="">— Select —</option>
           {field.options?.map((opt) => (
             <option key={opt} value={opt}>
@@ -228,22 +303,24 @@ function Field({
         </select>
       ) : field.type === "textarea" ? (
         <textarea
+          id={inputId}
           value={value}
           onChange={(e) => onChange(e.target.value)}
           placeholder={field.placeholder}
           rows={2}
-          className={base}
+          className={fieldClass}
         />
       ) : field.type === "combo" ? (
         <>
           {/* Type-or-select: free text with suggestions from a datalist. */}
           <input
+            id={inputId}
             type="text"
             list={`${field.key}-options`}
             value={value}
             onChange={(e) => onChange(e.target.value)}
             placeholder={field.placeholder}
-            className={base}
+            className={fieldClass}
             autoComplete="off"
           />
           <datalist id={`${field.key}-options`}>
@@ -254,13 +331,128 @@ function Field({
         </>
       ) : (
         <input
+          id={inputId}
           type={field.type ?? "text"}
           value={value}
           onChange={(e) => onChange(e.target.value)}
           placeholder={field.placeholder}
-          className={base}
+          className={fieldClass}
         />
       )}
+    </div>
+  );
+}
+
+function RowControls({
+  section,
+  data,
+  onChange,
+  onStatus,
+}: {
+  section: SectionDef;
+  data: Biodata;
+  onChange: (data: Biodata) => void;
+  onStatus: (message: string) => void;
+}) {
+  const id = useId();
+  const [adding, setAdding] = useState(false);
+  const [label, setLabel] = useState("");
+  const [value, setValue] = useState("");
+  const [error, setError] = useState("");
+  const removed = biodataSections.find((s) => s.id === section.id)!.fields
+    .filter((field) => data.hiddenFields?.includes(field.key));
+
+  const close = () => {
+    setAdding(false);
+    setLabel("");
+    setValue("");
+    setError("");
+    document.getElementById(`${id}-button`)?.focus();
+  };
+
+  return (
+    <div className="mt-4 space-y-3 border-t border-line pt-4">
+      {removed.length > 0 && (
+        <div>
+          <label htmlFor={`${id}-restore`} className="mb-1.5 block text-sm font-medium text-ink">Re-add predefined row</label>
+          <select
+            id={`${id}-restore`}
+            className={fieldClass}
+            value=""
+            onChange={(e) => {
+              if (!e.target.value) return;
+              onChange(restoreBiodataRow(data, e.target.value));
+              onStatus("Row re-added with an empty value.");
+              document.getElementById(`accordion-${section.id}`)?.focus();
+            }}
+          >
+            <option value="">Choose a removed row</option>
+            {removed.map((field) => <option key={field.key} value={field.key}>{field.label}</option>)}
+          </select>
+        </div>
+      )}
+      <Button
+        id={`${id}-button`}
+        type="button"
+        variant="secondary"
+        className="!text-xs"
+        aria-expanded={adding}
+        aria-controls={`${id}-add`}
+        onClick={() => setAdding((current) => !current)}
+      >
+        Add custom row
+      </Button>
+      {adding && (
+        <form
+          id={`${id}-add`}
+          noValidate
+          className="space-y-3 rounded-lg border border-line bg-canvas p-3"
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (!label.trim()) {
+              setError("Enter a label for your custom row.");
+              document.getElementById(`${id}-label`)?.focus();
+              return;
+            }
+            const rowId = `custom-${crypto.randomUUID()}`;
+            onChange({
+              ...data,
+              values: { ...data.values, [rowId]: value },
+              customRows: [...(data.customRows ?? []), { id: rowId, sectionId: section.id, label: label.trim() }],
+            });
+            onStatus(`${label.trim()} row added to ${section.title}.`);
+            close();
+          }}
+        >
+          <div>
+            <label htmlFor={`${id}-label`} className="mb-1.5 block text-sm font-medium text-ink">New row label</label>
+            <input
+              id={`${id}-label`}
+              autoFocus
+              required
+              value={label}
+              onChange={(e) => {
+                setLabel(e.target.value);
+                setError("");
+              }}
+              placeholder="e.g. Languages spoken"
+              className={fieldClass}
+              aria-invalid={!!error}
+              aria-describedby={error ? `${id}-error` : undefined}
+            />
+          </div>
+          <div>
+            <label htmlFor={`${id}-value`} className="mb-1.5 block text-sm font-medium text-ink">New row value</label>
+            <textarea id={`${id}-value`} value={value} onChange={(e) => setValue(e.target.value)} rows={2} className={fieldClass} />
+          </div>
+          {error && <p id={`${id}-error`} role="alert" className="text-xs text-red-600">{error}</p>}
+          <div className="flex gap-2">
+            <Button type="submit" className="!text-xs">Add row</Button>
+            <Button type="button" variant="ghost" className="!text-xs" onClick={close}>Cancel</Button>
+          </div>
+        </form>
+      )}
+      <p className="text-xs text-muted">Removing a row deletes its value. Predefined rows can be re-added above.</p>
     </div>
   );
 }

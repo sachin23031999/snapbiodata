@@ -25,8 +25,10 @@ export const heightOptions: string[] = Array.from({ length: 25 }, (_, i) => {
   return `${ft}'${inch}" (${cm} cm)`;
 });
 
+export type SectionId = "personal" | "family" | "contact";
+
 export interface SectionDef {
-  id: string;
+  id: SectionId;
   title: string;
   fields: FieldDef[];
 }
@@ -120,6 +122,16 @@ export interface Biodata {
   values: Record<string, string>;
   /** Profile photo as a data URL. Kept local until the user chooses to publish. */
   photo?: string;
+  /** Omitted by older records: all predefined fields are visible by default. */
+  hiddenFields?: string[];
+  /** Labels and placement only; values use the stable id in the values map. */
+  customRows?: CustomRow[];
+}
+
+export interface CustomRow {
+  id: string;
+  sectionId: SectionId;
+  label: string;
 }
 
 /** A published biodata, addressable at /<slug>. */
@@ -182,6 +194,70 @@ export const sampleBiodata: Biodata = {
     address: "12, Shivaji Nagar, Pune, Maharashtra 411005",
   },
 };
+
+/** Resolve the same editable rows for the form, every template and exports. */
+export function getBiodataSections(data: Biodata): SectionDef[] {
+  const hidden = new Set(data.hiddenFields);
+  return biodataSections.map((section) => ({
+    ...section,
+    fields: [
+      ...section.fields.filter((field) => !hidden.has(field.key)),
+      ...(data.customRows ?? [])
+        .filter((row) => row.sectionId === section.id)
+        .map((row): FieldDef => ({ key: row.id, label: row.label, type: "textarea" })),
+    ],
+  }));
+}
+
+/** Removing a row also deletes its value, including names used in headings. */
+export function removeBiodataRow(data: Biodata, key: string): Biodata {
+  const values = { ...data.values };
+  delete values[key];
+  const predefined = biodataSections.some((section) => section.fields.some((field) => field.key === key));
+  return {
+    ...data,
+    values,
+    hiddenFields: predefined ? [...new Set([...(data.hiddenFields ?? []), key])] : data.hiddenFields,
+    customRows: data.customRows?.filter((row) => row.id !== key),
+  };
+}
+
+export function restoreBiodataRow(data: Biodata, key: string): Biodata {
+  return { ...data, hiddenFields: data.hiddenFields?.filter((id) => id !== key) };
+}
+
+export function customRowError(data: Biodata): string | undefined {
+  if (data.customRows?.some((row) => !row.label.trim())) {
+    return "Please enter a label for every custom row, or remove the row.";
+  }
+}
+
+/** Validate JSON at the publishing boundary, including legacy records. */
+export function isBiodata(input: unknown): input is Biodata {
+  if (!input || typeof input !== "object") return false;
+  const data = input as Record<string, unknown>;
+  if (typeof data.header !== "string") return false;
+  if (data.photo !== undefined && typeof data.photo !== "string") return false;
+  if (!data.values || typeof data.values !== "object" || Array.isArray(data.values)) return false;
+  if (!Object.values(data.values).every((value) => typeof value === "string")) return false;
+  const fieldKeys = new Set(biodataSections.flatMap((section) => section.fields.map((field) => field.key)));
+  if (
+    data.hiddenFields !== undefined &&
+    (!Array.isArray(data.hiddenFields) || !data.hiddenFields.every((key) => typeof key === "string" && fieldKeys.has(key)))
+  ) return false;
+  if (data.customRows !== undefined) {
+    if (!Array.isArray(data.customRows)) return false;
+    const ids = new Set<string>();
+    for (const row of data.customRows) {
+      if (!row || typeof row !== "object") return false;
+      if (typeof row.id !== "string" || !/^custom-[a-zA-Z0-9-]+$/.test(row.id) || ids.has(row.id)) return false;
+      if (!biodataSections.some((section) => section.id === row.sectionId)) return false;
+      if (typeof row.label !== "string" || !row.label.trim()) return false;
+      ids.add(row.id);
+    }
+  }
+  return true;
+}
 
 /** Whether a field has a meaningful (non-blank) value. */
 export function isFieldFilled(field: FieldDef, values: Record<string, string>): boolean {

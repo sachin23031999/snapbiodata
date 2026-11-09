@@ -43,7 +43,7 @@ export default function TraditionalTemplate({ data }: TemplateProps) {
   );
 
   const renderRow = (row: RenderedRow) => (
-    <div className="flex gap-3 text-[13.5px] leading-relaxed">
+    <div data-biodata-row className="flex gap-3 text-[13.5px] leading-relaxed">
       <div className="w-[38%] shrink-0 font-semibold text-ink/80">{row.label}</div>
       <div className="flex-1 text-ink">
         <span className="mr-2 text-muted">:</span>

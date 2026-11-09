@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { slugify } from "@/lib/slug";
 import { shrinkImage } from "@/lib/image";
-import type { Biodata } from "@/data/biodata";
+import { customRowError, type Biodata } from "@/data/biodata";
 
 type Status = "idle" | "publishing" | "done" | "error";
 
@@ -33,6 +33,12 @@ export default function PublishDialog({
   }, [onClose]);
 
   const publish = async () => {
+    const rowError = customRowError(data);
+    if (rowError) {
+      setError(rowError);
+      setStatus("error");
+      return;
+    }
     setStatus("publishing");
     setError("");
     try {

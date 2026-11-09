@@ -76,11 +76,11 @@ export default function FramedDoc(props: FramedDocProps) {
   // display:none → visible on mobile), forcing a re-measure + re-paginate.
   const [visibilityTick, setVisibilityTick] = useState(0);
 
-  const sig = JSON.stringify(data.values) + (data.photo ? "1" : "0") + data.header + rowLevel;
+  const sig = JSON.stringify([sections, Boolean(data.photo), data.header, rowLevel]);
 
   useLayoutEffect(() => {
     const contentPx = A4_H - (padTop + padBottom) * MM - BUFFER;
-    const heights = refs.current.map((el) => (el ? el.offsetHeight : 0));
+    const heights = units.map((_, i) => refs.current[i]?.offsetHeight ?? 0);
     // A hidden ancestor measures every unit as 0 — don't paginate from garbage.
     if (heights.every((v) => v === 0) && units.length > 0) return;
     // Derived layout from measured DOM — setting state here is intentional.
@@ -124,7 +124,7 @@ export default function FramedDoc(props: FramedDocProps) {
         <div ref={measureRef} style={{ width: A4_W - 2 * padX * MM }}>
           {units.map((u, i) => (
             <div
-              key={i}
+              key={unitKey(u)}
               ref={(el) => {
                 refs.current[i] = el;
               }}
@@ -148,7 +148,7 @@ export default function FramedDoc(props: FramedDocProps) {
           <div className="relative" style={contentStyle}>
             {pageUnits.map((u, j) => (
               <div
-                key={`${pi}-${j}`}
+                key={unitKey(u)}
                 style={{
                   marginTop: u.type === "heading" && j > 0 ? GAPS.section : 0,
                   marginBottom: gapForRender(u),
@@ -162,6 +162,13 @@ export default function FramedDoc(props: FramedDocProps) {
       ))}
     </>
   );
+
+  function unitKey(unit: Unit): string {
+    if (unit.type === "header") return "header";
+    const section = sections[unit.s];
+    if (!section) return `${unit.type}-${unit.s}`;
+    return unit.type === "row" ? section.rows[unit.r]?.id ?? `row-${unit.s}-${unit.r}` : `${unit.type}-${section.id}`;
+  }
 }
 
 function gapForRender(u: Unit): number {

@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { getTemplate } from "@/components/templates";
 import { putRecord, slugExists } from "@/lib/store";
 import { reservedSlugs, slugify } from "@/lib/slug";
-import type { Biodata, BiodataRecord } from "@/data/biodata";
+import { isBiodata, type BiodataRecord } from "@/data/biodata";
 
 export const runtime = "nodejs";
 
@@ -11,9 +11,9 @@ const MAX_PHOTO_CHARS = 400_000; // ~300 KB data URL
 const MAX_BODY_CHARS = 600_000;
 
 interface PublishBody {
-  slug?: string;
-  templateId?: string;
-  data?: Biodata;
+  slug?: unknown;
+  templateId?: unknown;
+  data?: unknown;
 }
 
 /** Find a free slug, appending -2, -3, … on collision. */
@@ -41,11 +41,18 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Invalid request." }, { status: 400 });
   }
 
-  const data = body.data;
-  if (!data || typeof data !== "object" || !data.values) {
+  const input = body?.data;
+  if (!input) {
     return NextResponse.json({ error: "Missing biodata." }, { status: 400 });
   }
-  if (!data.values.fullName?.trim()) {
+  const data = typeof input === "object" && !Array.isArray(input) ? { header: "", ...input } : input;
+  if (!isBiodata(data)) {
+    return NextResponse.json({ error: "Invalid biodata. Check your row labels and values." }, { status: 400 });
+  }
+  if ((body.slug !== undefined && typeof body.slug !== "string") || (body.templateId !== undefined && typeof body.templateId !== "string")) {
+    return NextResponse.json({ error: "Invalid link or template." }, { status: 400 });
+  }
+  if (data.hiddenFields?.includes("fullName") || !data.values.fullName?.trim()) {
     return NextResponse.json({ error: "Please enter the Full Name before publishing." }, { status: 400 });
   }
   if (data.photo && data.photo.length > MAX_PHOTO_CHARS) {
@@ -58,7 +65,13 @@ export async function POST(req: Request) {
   const record: BiodataRecord = {
     slug,
     templateId,
-    data: { header: data.header ?? "", values: data.values, photo: data.photo },
+    data: {
+      header: data.header,
+      values: data.values,
+      photo: data.photo,
+      hiddenFields: data.hiddenFields,
+      customRows: data.customRows,
+    },
     createdAt: Date.now(),
   };
 

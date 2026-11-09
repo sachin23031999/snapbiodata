@@ -20,6 +20,7 @@ Pick a template, fill your details, add a photo, then **download a print-ready P
 
 - **5 beautiful templates** — Traditional, Elegant, Modern, Floral & Royal (with hand-drawn SVG ornaments).
 - **Live preview** — your A4 biodata updates as you type.
+- **Customizable rows** — remove any predefined row, re-add it, or add your own labeled rows in Personal, Family and Contact Details. Edit labels and values independently, including duplicate labels, in every template and PDF.
 - **Photo upload** — looks great on every template, shrunk automatically for fast sharing.
 - **Download PDF** — crisp, print-ready A4 in one click.
 - **Share a link** — publish a clean URL like `snapbiodata.com/your-name` to send on WhatsApp.
@@ -75,6 +76,21 @@ src/
 3. Run `npm run dev`, open `/create`, pick your template, and check the live preview + PDF.
 
 That's it — the form, photo, publish and PDF all work with your template for free. See [CONTRIBUTING.md](./CONTRIBUTING.md) for details.
+
+### Customize your rows
+
+Use **Remove** next to a field to delete the row and its value. Use **Re-add
+predefined row** in that section to restore an empty field in its original
+position. **Add custom row** lets you enter a label and an optional multiline
+value; added rows appear at the end of their section. Custom labels and values
+remain editable, and duplicate labels are supported. Blank values are omitted
+from the preview and PDF; a custom label is required before downloading or
+publishing. **Clear all** and **Load sample** reset the rows to the default layout.
+
+Edits remain in browser memory (there is no draft save/load or reload recovery).
+The existing publish API preserves row customization in stored records, while
+older published records still use all predefined rows. Sharing remains gated
+as described below; this does not enable publishing or send edits to a server.
 
 ## ☁️ Deployment
 

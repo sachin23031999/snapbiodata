@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { useState } from "react";
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen, fireEvent, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import BiodataForm from "./BiodataForm";
 import { emptyBiodata, sampleBiodata, type Biodata } from "@/data/biodata";
@@ -44,5 +44,75 @@ describe("BiodataForm", () => {
     const notAnImage = new File(["x"], "resume.pdf", { type: "application/pdf" });
     fireEvent.change(fileInput, { target: { files: [notAnImage] } });
     expect(screen.getByText(/choose an image file/i)).toBeInTheDocument();
+  });
+
+  it("removes and re-adds a predefined row without its old value", async () => {
+    render(<Harness initial={sampleBiodata} />);
+    await userEvent.click(screen.getByRole("button", { name: "Remove Date of Birth row" }));
+    expect(screen.queryByLabelText("Date of Birth")).not.toBeInTheDocument();
+    expect(screen.getByText("18/18")).toBeInTheDocument();
+    await userEvent.selectOptions(screen.getByLabelText("Re-add predefined row"), "dob");
+    expect(screen.getByLabelText("Date of Birth")).toHaveValue("");
+    expect(screen.getByText("18/19")).toBeInTheDocument();
+    expect(screen.queryByLabelText("Re-add predefined row")).not.toBeInTheDocument();
+  });
+
+  it("adds multiple rows with duplicate labels and independently edits and deletes them", async () => {
+    render(<Harness initial={emptyBiodata} />);
+    for (const value of ["First value", "Second value"]) {
+      await userEvent.click(screen.getByRole("button", { name: "Add custom row" }));
+      fireEvent.change(screen.getByLabelText("New row label"), { target: { value: "Education" } });
+      fireEvent.change(screen.getByLabelText("New row value"), { target: { value } });
+      await userEvent.click(screen.getByRole("button", { name: "Add row", exact: true }));
+    }
+    const groups = screen.getAllByRole("group", { name: "Education custom row" });
+    expect(groups).toHaveLength(2);
+    fireEvent.change(within(groups[0]!).getByLabelText("Row label"), { target: { value: "Qualifications" } });
+    fireEvent.change(within(groups[0]!).getByLabelText("Row value"), { target: { value: "Updated value" } });
+    expect(within(groups[1]!).getByLabelText("Row value")).toHaveValue("Second value");
+    await userEvent.click(within(groups[0]!).getByRole("button", { name: "Remove Qualifications row" }));
+    expect(screen.queryByDisplayValue("Updated value")).not.toBeInTheDocument();
+    expect(screen.getByDisplayValue("Second value")).toBeInTheDocument();
+    expect(screen.getByLabelText("Education")).toHaveValue("");
+  });
+
+  it.each(["Family Details", "Contact Details"])("adds a custom row in %s", async (title) => {
+    render(<Harness initial={emptyBiodata} />);
+    await userEvent.click(screen.getByRole("button", { name: new RegExp(title) }));
+    const section = screen.getByRole("button", { name: new RegExp(title) }).closest("section")!;
+    const ui = within(section);
+    await userEvent.click(ui.getByRole("button", { name: "Add custom row" }));
+    fireEvent.change(ui.getByLabelText("New row label"), { target: { value: "Notes" } });
+    await userEvent.click(ui.getByRole("button", { name: "Add row", exact: true }));
+    expect(ui.getByRole("group", { name: "Notes custom row" })).toBeInTheDocument();
+  });
+
+  it("shows inline errors for blank labels when adding and editing", async () => {
+    render(<Harness initial={emptyBiodata} />);
+    await userEvent.click(screen.getByRole("button", { name: "Add custom row" }));
+    await userEvent.click(screen.getByRole("button", { name: "Add row", exact: true }));
+    expect(screen.getByRole("alert")).toHaveTextContent("Enter a label");
+    expect(screen.getByLabelText("New row label")).toHaveFocus();
+    fireEvent.change(screen.getByLabelText("New row label"), { target: { value: "Notes" } });
+    await userEvent.click(screen.getByRole("button", { name: "Add row", exact: true }));
+    fireEvent.change(screen.getByLabelText("Row label"), { target: { value: " " } });
+    expect(screen.getByLabelText("Row label")).toHaveAttribute("aria-invalid", "true");
+    expect(screen.getByRole("alert")).toHaveTextContent("Enter a row label");
+  });
+
+  it.each(["Clear all", "Load sample"])("%s restores default rows and removes customizations", async (action) => {
+    render(<Harness initial={{
+      ...emptyBiodata,
+      hiddenFields: ["dob"],
+      customRows: [{ id: "custom-one", sectionId: "personal", label: "Notes" }],
+      values: { "custom-one": "My notes" },
+    }} />);
+    await userEvent.click(screen.getByRole("button", { name: "Add custom row" }));
+    fireEvent.change(screen.getByLabelText("New row label"), { target: { value: "Unsubmitted draft" } });
+    await userEvent.click(screen.getByRole("button", { name: action }));
+    expect(screen.getByLabelText("Date of Birth")).toBeInTheDocument();
+    expect(screen.queryByRole("group", { name: "Notes custom row" })).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Re-add predefined row")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("New row label")).not.toBeInTheDocument();
   });
 });

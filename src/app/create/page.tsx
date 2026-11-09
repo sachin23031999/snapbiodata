@@ -9,7 +9,7 @@ import SupportDialog from "@/components/SupportDialog";
 import Button from "@/components/ui/Button";
 import { ArrowRightIcon, DownloadIcon, HeartIcon } from "@/components/ui/icons";
 import { defaultTemplateId, getTemplate } from "@/components/templates";
-import { sampleBiodata, type Biodata } from "@/data/biodata";
+import { customRowError, sampleBiodata, type Biodata } from "@/data/biodata";
 import { slugify } from "@/lib/slug";
 
 export default function CreatePage() {
@@ -31,6 +31,12 @@ export default function CreatePage() {
   // output is identical on every device. Ensure the preview is visible first
   // (on mobile it may be on the hidden tab) and let it lay out before capturing.
   const handleDownload = useCallback(async () => {
+    const error = customRowError(data);
+    if (error) {
+      window.alert(error);
+      setMobileTab("edit");
+      return;
+    }
     setMobileTab("preview");
     setDownloading(true);
     try {
@@ -49,7 +55,7 @@ export default function CreatePage() {
     } finally {
       setDownloading(false);
     }
-  }, [data.values.fullName]);
+  }, [data]);
 
   const downloadBtn = (cls = "") => (
     <Button variant="secondary" className={cls} onClick={handleDownload} disabled={downloading}>
@@ -59,7 +65,15 @@ export default function CreatePage() {
   );
 
   const publishBtn = (cls = "") => (
-    <Button variant="primary" className={cls} onClick={() => setShowPublish(true)}>
+    <Button variant="primary" className={cls} onClick={() => {
+      const error = customRowError(data);
+      if (error) {
+        window.alert(error);
+        setMobileTab("edit");
+        return;
+      }
+      setShowPublish(true);
+    }}>
       <ArrowRightIcon />
       Share
     </Button>

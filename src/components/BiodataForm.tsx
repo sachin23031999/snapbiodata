@@ -8,11 +8,14 @@ import {
   emptyBiodata,
   sampleBiodata,
   getBiodataSections,
+  moveBiodataRow,
+  normalizeBiodataRowOrder,
   removeBiodataRow,
   restoreBiodataRow,
   type Biodata,
   type FieldDef,
   type SectionDef,
+  type RowMoveDirection,
 } from "@/data/biodata";
 import { ChevronDownIcon } from "@/components/ui/icons";
 import Button from "@/components/ui/Button";
@@ -26,6 +29,7 @@ const clone = (b: Biodata): Biodata => ({
   values: { ...b.values },
   hiddenFields: b.hiddenFields?.slice(),
   customRows: b.customRows?.map((row) => ({ ...row })),
+  rowOrder: normalizeBiodataRowOrder(b),
 });
 
 interface Props {
@@ -171,13 +175,20 @@ export default function BiodataForm({ data, onChange }: Props) {
           onToggle={toggle}
         >
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            {section.fields.map((field) => (
+            {section.fields.map((field, index) => (
               <Field
                 key={field.key}
                 field={field}
                 value={data.values[field.key] ?? ""}
                 onChange={(v) => setValue(field.key, v)}
                 custom={data.customRows?.some((row) => row.id === field.key)}
+                canMoveUp={index > 0}
+                canMoveDown={index < section.fields.length - 1}
+                onMove={(direction) => {
+                  onChange(moveBiodataRow(data, section.id, field.key, direction));
+                  const position = index + (direction === "up" ? -1 : 1) + 1;
+                  setRowStatus(`${field.label || "Custom"} row moved ${direction}. Position ${position} of ${section.fields.length} in ${section.title}.`);
+                }}
                 onLabelChange={(label) => onChange({
                   ...data,
                   customRows: data.customRows?.map((row) => row.id === field.key ? { ...row, label } : row),
@@ -247,6 +258,9 @@ function Field({
   custom,
   onLabelChange,
   onRemove,
+  onMove,
+  canMoveUp,
+  canMoveDown,
 }: {
   field: FieldDef;
   value: string;
@@ -254,6 +268,9 @@ function Field({
   custom?: boolean;
   onLabelChange: (label: string) => void;
   onRemove: () => void;
+  onMove: (direction: RowMoveDirection) => void;
+  canMoveUp: boolean;
+  canMoveDown: boolean;
 }) {
   const wide = field.type === "textarea";
   const inputId = `field-${field.key}`;
@@ -264,6 +281,7 @@ function Field({
       className={wide ? "min-w-0 sm:col-span-2" : "min-w-0"}
       role={custom ? "group" : undefined}
       aria-label={custom ? `${field.label || "Untitled"} custom row` : undefined}
+      data-row-id={field.key}
     >
       {custom && (
         <div className="mb-2">
@@ -338,6 +356,32 @@ function Field({
           placeholder={field.placeholder}
           className={fieldClass}
         />
+      )}
+      {custom && (
+        <div className="mt-2 flex gap-2">
+          {(["up", "down"] as const).map((direction) => (
+            <Button
+              key={direction}
+              id={`${inputId}-${direction}`}
+              type="button"
+              variant="secondary"
+              className="min-h-11 flex-1 !px-2 !text-xs"
+              aria-label={`Move ${field.label || "custom"} row ${direction}`}
+              disabled={direction === "up" ? !canMoveUp : !canMoveDown}
+              onClick={() => {
+                onMove(direction);
+                requestAnimationFrame(() => {
+                  const preferred = document.getElementById(`${inputId}-${direction}`);
+                  const fallback = document.getElementById(`${inputId}-${direction === "up" ? "down" : "up"}`);
+                  if (preferred instanceof HTMLButtonElement && !preferred.disabled) preferred.focus();
+                  else fallback?.focus();
+                });
+              }}
+            >
+              Move {direction}
+            </Button>
+          ))}
+        </div>
       )}
     </div>
   );
@@ -452,7 +496,7 @@ function RowControls({
           </div>
         </form>
       )}
-      <p className="text-xs text-muted">Removing a row deletes its value. Predefined rows can be re-added above.</p>
+      <p className="text-xs text-muted">Move custom rows up or down within this section. Removing a row deletes its value. Predefined rows can be re-added above.</p>
     </div>
   );
 }

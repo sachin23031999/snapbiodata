@@ -70,4 +70,36 @@ describe("publishing customized biodata", () => {
     expect(response.status).toBe(400);
     expect(store.putRecord).not.toHaveBeenCalled();
   });
+
+  it("normalizes and persists custom rows before/between standard rows across a JSON round trip", async () => {
+    const data = {
+      ...sampleBiodata,
+      hiddenFields: ["dob"],
+      customRows: [
+        { id: "custom-one", sectionId: "personal", label: "Notes" },
+        { id: "custom-two", sectionId: "personal", label: "Notes" },
+      ],
+      values: { ...sampleBiodata.values, "custom-one": "First", "custom-two": "Second" },
+      rowOrder: { personal: ["custom-two", "fullName", "unknown", "custom-one", "custom-two", "fatherName"] },
+    };
+    const response = await publish(data);
+    expect(response.status).toBe(200);
+    const loaded: BiodataRecord = JSON.parse(JSON.stringify(store.putRecord.mock.calls[0]![0]));
+    expect(loaded.data.rowOrder?.personal?.slice(0, 4)).toEqual(["custom-two", "fullName", "custom-one", "dob"]);
+    expect(loaded.data.rowOrder?.personal).toHaveLength(21);
+    expect(loaded.data.rowOrder?.personal).not.toContain("unknown");
+    expect(loaded.data.rowOrder?.personal).not.toContain("fatherName");
+    expect(renderedSections(loaded.data)).toEqual(renderedSections(data));
+    expect(renderedSections(loaded.data)[0]!.rows.slice(0, 3).map((row) => row.id)).toEqual(["custom-two", "fullName", "custom-one"]);
+  });
+
+  it.each([null, [], { personal: "fullName" }, { personal: [42] }, { invalid: ["fullName"] }])(
+    "rejects malformed row order with explicit API feedback: %j",
+    async (rowOrder) => {
+      const response = await publish({ ...sampleBiodata, rowOrder });
+      expect(response.status).toBe(400);
+      expect(await response.json()).toEqual({ error: expect.stringMatching(/invalid biodata/i) });
+      expect(store.putRecord).not.toHaveBeenCalled();
+    },
+  );
 });

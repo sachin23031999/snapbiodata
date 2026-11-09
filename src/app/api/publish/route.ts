@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { getTemplate } from "@/components/templates";
 import { putRecord, slugExists } from "@/lib/store";
 import { reservedSlugs, slugify } from "@/lib/slug";
-import { isBiodata, type BiodataRecord } from "@/data/biodata";
+import { isBiodata, normalizeBiodataRowOrder, type BiodataRecord } from "@/data/biodata";
 
 export const runtime = "nodejs";
 
@@ -71,6 +71,7 @@ export async function POST(req: Request) {
       photo: data.photo,
       hiddenFields: data.hiddenFields,
       customRows: data.customRows,
+      rowOrder: normalizeBiodataRowOrder(data),
     },
     createdAt: Date.now(),
   };

@@ -20,7 +20,7 @@ Pick a template, fill your details, add a photo, then **download a print-ready P
 
 - **5 beautiful templates** — Traditional, Elegant, Modern, Floral & Royal (with hand-drawn SVG ornaments).
 - **Live preview** — your A4 biodata updates as you type.
-- **Customizable rows** — remove any predefined row, re-add it, or add your own labeled rows in Personal, Family and Contact Details. Edit labels and values independently, including duplicate labels, in every template and PDF.
+- **Customizable rows** — remove/re-add predefined rows and add, edit, move or delete custom rows in Personal, Family and Contact Details. Duplicate labels and custom ordering work in every template and PDF.
 - **Photo upload** — looks great on every template, shrunk automatically for fast sharing.
 - **Download PDF** — crisp, print-ready A4 in one click.
 - **Share a link** — publish a clean URL like `snapbiodata.com/your-name` to send on WhatsApp.
@@ -80,16 +80,21 @@ That's it — the form, photo, publish and PDF all work with your template for f
 ### Customize your rows
 
 Use **Remove** next to a field to delete the row and its value. Use **Re-add
-predefined row** in that section to restore an empty field in its original
-position. **Add custom row** lets you enter a label and an optional multiline
-value; added rows appear at the end of their section. Custom labels and values
-remain editable, and duplicate labels are supported. Blank values are omitted
+predefined row** in that section to restore an empty field in its current order
+(or its original position if no rows have moved). **Add custom row** lets you
+enter a label and an optional multiline value. New rows start at the end;
+**Move up** / **Move down** can place a custom row anywhere in its section,
+including before or between predefined rows. The live preview, all templates,
+PDFs and published records use the same order. Custom labels and values remain
+editable, and duplicate labels are supported. Blank values are omitted
 from the preview and PDF; a custom label is required before downloading or
 publishing. **Clear all** and **Load sample** reset the rows to the default layout.
 
 Edits remain in browser memory (there is no draft save/load or reload recovery).
 The existing publish API preserves row customization in stored records, while
-older published records still use all predefined rows. Sharing remains gated
+older published records still use the default row order. Unknown, duplicate or
+wrong-section order references are ignored, and unlisted rows follow in default
+order. Sharing remains gated
 as described below; this does not enable publishing or send edits to a server.
 
 ## ☁️ Deployment

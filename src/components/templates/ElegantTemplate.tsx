@@ -39,7 +39,7 @@ export default function ElegantTemplate({ data }: TemplateProps) {
               </h2>
               <dl className="mx-auto max-w-[150mm] space-y-2">
                 {section.rows.map((row) => (
-                  <div key={row.id} className="flex justify-between gap-6 border-b border-line pb-1.5 text-[13.5px]">
+                  <div key={row.id} data-biodata-row={row.id} className="flex justify-between gap-6 border-b border-line pb-1.5 text-[13.5px]">
                     <dt className="text-muted">{row.label}</dt>
                     <dd className="text-right font-medium text-ink">{row.value}</dd>
                   </div>

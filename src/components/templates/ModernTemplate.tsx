@@ -28,7 +28,7 @@ export default function ModernTemplate({ data }: TemplateProps) {
               </h2>
               <dl className="space-y-2.5">
                 {section.rows.map((row) => (
-                  <div key={row.id} className="text-[12.5px] leading-snug">
+                  <div key={row.id} data-biodata-row={row.id} className="text-[12.5px] leading-snug">
                     <dt className="text-white/60">{row.label}</dt>
                     <dd className="font-medium text-white">{row.value}</dd>
                   </div>
@@ -56,7 +56,7 @@ export default function ModernTemplate({ data }: TemplateProps) {
                 </h2>
                 <dl className="space-y-1.5">
                   {section.rows.map((row) => (
-                    <div key={row.id} className="flex gap-3 text-[13px] leading-relaxed">
+                    <div key={row.id} data-biodata-row={row.id} className="flex gap-3 text-[13px] leading-relaxed">
                       <dt className="w-[40%] shrink-0 font-semibold text-ink/75">{row.label}</dt>
                       <dd className="flex-1 text-ink">{row.value}</dd>
                     </div>

@@ -78,4 +78,30 @@ describe("template row resolution", () => {
     expect(error).not.toHaveBeenCalled();
     error.mockRestore();
   });
+
+  it.each(templates)("immediately renders order-only changes and captures that order for $name PDFs", async ({ Component }) => {
+    const ordered: Biodata = {
+      ...data,
+      rowOrder: {
+        personal: ["custom-two", "fullName", "custom-one", "education"],
+        family: ["custom-family", "motherName"],
+        contact: ["custom-contact", "email"],
+      },
+    };
+    const { container, rerender } = render(<Component data={data} />);
+    rerender(<Component data={ordered} />);
+    const actualIds = Array.from(container.querySelectorAll(".a4 [data-biodata-row]"), (row) => row.getAttribute("data-biodata-row"));
+    for (const section of renderedSections(ordered)) {
+      const expectedIds = section.rows.map((row) => row.id);
+      expect(actualIds.filter((id) => expectedIds.includes(id!))).toEqual(expectedIds);
+    }
+    expect(actualIds.filter((id) => id === "custom-two")).toHaveLength(1);
+    mocks.capture.mockClear();
+    mocks.capture.mockImplementation(async (page: HTMLElement) => {
+      expect(page.querySelectorAll("[data-biodata-row]").length).toBeGreaterThan(0);
+      return { toDataURL: () => "data:image/jpeg;base64,AAAA" };
+    });
+    await downloadBiodataPdf(container, "reordered.pdf");
+    expect(mocks.capture.mock.calls.map(([page]) => page)).toEqual(Array.from(container.querySelectorAll(".a4")));
+  });
 });

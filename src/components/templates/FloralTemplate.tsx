@@ -52,7 +52,7 @@ export default function FloralTemplate({ data }: TemplateProps) {
   );
 
   const renderRow = (row: RenderedRow) => (
-    <div data-biodata-row className="flex gap-3 text-[13px] leading-relaxed text-[#4a3b22]">
+    <div data-biodata-row={row.id} className="flex gap-3 text-[13px] leading-relaxed text-[#4a3b22]">
       <div className="w-[38%] shrink-0 font-semibold text-[#6b5836]">{row.label}</div>
       <div className="flex-1">
         <span className="mr-2 text-[#b8893a]">:</span>

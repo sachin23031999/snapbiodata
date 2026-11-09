@@ -126,7 +126,11 @@ export interface Biodata {
   hiddenFields?: string[];
   /** Labels and placement only; values use the stable id in the values map. */
   customRows?: CustomRow[];
+  /** Per-section row ids, including hidden predefined rows so restore keeps their place. */
+  rowOrder?: Partial<Record<SectionId, string[]>>;
 }
+
+export type RowMoveDirection = "up" | "down";
 
 export interface CustomRow {
   id: string;
@@ -195,18 +199,62 @@ export const sampleBiodata: Biodata = {
   },
 };
 
+function orderedSectionFields(section: SectionDef, data: Biodata): FieldDef[] {
+  const fields = [
+    ...section.fields,
+    ...(data.customRows ?? [])
+      .filter((row) => row.sectionId === section.id)
+      .map((row): FieldDef => ({ key: row.id, label: row.label, type: "textarea" })),
+  ];
+  const byKey = new Map(fields.map((field) => [field.key, field]));
+  const order = new Set([...(data.rowOrder?.[section.id] ?? []), ...byKey.keys()]);
+  return Array.from(order).flatMap((key) => {
+    const field = byKey.get(key);
+    return field ? [field] : [];
+  });
+}
+
+/** Ignore stale/duplicate/cross-section ids; append unlisted rows in default order. */
+export function normalizeBiodataRowOrder(data: Biodata): Biodata["rowOrder"] {
+  if (!data.rowOrder) return undefined;
+  const order: Biodata["rowOrder"] = {};
+  for (const section of biodataSections) {
+    if (data.rowOrder[section.id] !== undefined) {
+      order[section.id] = orderedSectionFields(section, data).map((field) => field.key);
+    }
+  }
+  return order;
+}
+
 /** Resolve the same editable rows for the form, every template and exports. */
 export function getBiodataSections(data: Biodata): SectionDef[] {
   const hidden = new Set(data.hiddenFields);
   return biodataSections.map((section) => ({
     ...section,
-    fields: [
-      ...section.fields.filter((field) => !hidden.has(field.key)),
-      ...(data.customRows ?? [])
-        .filter((row) => row.sectionId === section.id)
-        .map((row): FieldDef => ({ key: row.id, label: row.label, type: "textarea" })),
-    ],
+    fields: orderedSectionFields(section, data).filter((field) => !hidden.has(field.key)),
   }));
+}
+
+/** Move past a visible neighbor while retaining the relative order of hidden rows. */
+export function moveBiodataRow(
+  data: Biodata,
+  sectionId: SectionId,
+  rowId: string,
+  direction: RowMoveDirection,
+): Biodata {
+  if (!data.customRows?.some((row) => row.id === rowId && row.sectionId === sectionId)) return data;
+  const section = getBiodataSections(data).find((section) => section.id === sectionId)!;
+  const index = section.fields.findIndex((field) => field.key === rowId);
+  if (index < 0) return data;
+  const neighbor = section.fields[index + (direction === "up" ? -1 : 1)];
+  if (!neighbor) return data;
+  const definition = biodataSections.find((section) => section.id === sectionId)!;
+  const order = orderedSectionFields(definition, data).map((field) => field.key);
+  const from = order.indexOf(rowId);
+  order.splice(from, 1);
+  const to = order.indexOf(neighbor.key);
+  order.splice(to + (direction === "down" ? 1 : 0), 0, rowId);
+  return { ...data, rowOrder: { ...normalizeBiodataRowOrder(data), [sectionId]: order } };
 }
 
 /** Removing a row also deletes its value, including names used in headings. */
@@ -214,12 +262,13 @@ export function removeBiodataRow(data: Biodata, key: string): Biodata {
   const values = { ...data.values };
   delete values[key];
   const predefined = biodataSections.some((section) => section.fields.some((field) => field.key === key));
-  return {
+  const next: Biodata = {
     ...data,
     values,
     hiddenFields: predefined ? [...new Set([...(data.hiddenFields ?? []), key])] : data.hiddenFields,
     customRows: data.customRows?.filter((row) => row.id !== key),
   };
+  return { ...next, rowOrder: normalizeBiodataRowOrder(next) };
 }
 
 export function restoreBiodataRow(data: Biodata, key: string): Biodata {
@@ -245,6 +294,13 @@ export function isBiodata(input: unknown): input is Biodata {
     data.hiddenFields !== undefined &&
     (!Array.isArray(data.hiddenFields) || !data.hiddenFields.every((key) => typeof key === "string" && fieldKeys.has(key)))
   ) return false;
+  if (data.rowOrder !== undefined) {
+    if (!data.rowOrder || typeof data.rowOrder !== "object" || Array.isArray(data.rowOrder)) return false;
+    for (const [sectionId, order] of Object.entries(data.rowOrder)) {
+      if (!biodataSections.some((section) => section.id === sectionId)) return false;
+      if (!Array.isArray(order) || !order.every((key) => typeof key === "string")) return false;
+    }
+  }
   if (data.customRows !== undefined) {
     if (!Array.isArray(data.customRows)) return false;
     const ids = new Set<string>();

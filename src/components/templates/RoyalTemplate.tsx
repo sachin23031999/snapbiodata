@@ -63,7 +63,7 @@ export default function RoyalTemplate({ data }: TemplateProps) {
           it must not use viewport breakpoints (that made mobile paginate to 2). */}
       <dl className="grid grid-cols-2 gap-x-8 gap-y-1.5 px-1">
         {section.rows.map((row) => (
-          <div key={row.id} className="flex gap-3 text-[12.5px] leading-relaxed">
+          <div key={row.id} data-biodata-row={row.id} className="flex gap-3 text-[12.5px] leading-relaxed">
             <dt className="w-[42%] shrink-0 font-semibold text-[#55606f]">{row.label}</dt>
             <dd className="flex-1">{row.value}</dd>
           </div>

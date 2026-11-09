@@ -35,6 +35,18 @@ describe("FramedDoc customization layout", () => {
       customRows: data.customRows!.map((row, i) => i === 0 ? { ...row, label: "Expanded label" } : row),
     }));
     expect(container.querySelectorAll(".a4")).toHaveLength(2);
+    expect(container.querySelectorAll(".a4")[0]).toHaveTextContent("First");
+    expect(container.querySelectorAll(".a4")[0]).not.toHaveTextContent("Second");
+    rerender(doc({
+      ...data,
+      customRows: data.customRows!.map((row, i) => i === 0 ? { ...row, label: "Expanded label" } : row),
+      rowOrder: { personal: ["custom-two", "custom-three", "custom-one"] },
+    }));
+    expect(container.querySelectorAll(".a4")).toHaveLength(2);
+    expect(container.querySelectorAll(".a4")[0]).toHaveTextContent("Second");
+    expect(container.querySelectorAll(".a4")[0]).toHaveTextContent("Third");
+    expect(container.querySelectorAll(".a4")[0]).not.toHaveTextContent("First");
+    expect(container.querySelectorAll(".a4")[1]).toHaveTextContent("First");
     rerender(doc({ ...data, customRows: data.customRows!.slice(1) }));
     expect(container.querySelectorAll(".a4")).toHaveLength(1);
     expect(container.querySelector(".a4")).not.toHaveTextContent("First");
